@@ -1,38 +1,33 @@
 pipeline {
     agent any
 
-    tools {
-        // Agar aapne pichle task ki tarah NodeJS ki jagah koi Python tool configure kiya hai toh yahan likhein, 
-        // warna agar server par default python3 installed hai toh is tools block ko hata sakte hain.
-    }
-
     stages {
-        Def 'Environment Check' {
-            Steps {
-                Sh 'python3 --version'
-                Sh 'pip3 --version'
+        stage('Environment Check') {
+            steps {
+                sh 'python3 --version'
+                sh 'pip3 --version'
             }
         }
 
-        Stage('Install Dependencies') {
-            Steps {
-                // Dependency install karne ke liye poetry aur Makefile ka use ho raha hai
-                Sh 'pip3 install poetry'
-                Sh 'poetry install'
+        stage('Install Dependencies') {
+            steps {
+                // Poetry pipeline ke liye binary paths globally load karna ya local tool setup
+                sh 'pip3 install --user poetry || pip3 install poetry'
+                sh 'export PATH="$HOME/.local/bin:$PATH" && poetry install'
             }
         }
 
-        Stage('Lint Checks') {
-            Steps {
-                // Repo ke instructions ke mutabik linting (Format) check karne ka make command
-                Sh 'poetry run make fmt || true' 
+        stage('Lint Checks') {
+            steps {
+                // Makefile me clean fmt command available h use execute kr rahe h
+                sh 'export PATH="$HOME/.local/bin:$PATH" && poetry run make fmt || true' 
             }
         }
 
-        Stage('Unit Tests') {
-            Steps {
-                // Pytest chalane aur coverage nikalne ka standard command jo repo mein bataya hai
-                Sh 'poetry run pytest'
+        stage('Unit Tests') {
+            steps {
+                // Pytest se application modules components test kr rahe h
+                sh 'export PATH="$HOME/.local/bin:$PATH" && poetry run pytest'
             }
         }
     }
