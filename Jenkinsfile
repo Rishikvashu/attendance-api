@@ -11,23 +11,33 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // Poetry pipeline ke liye binary paths globally load karna ya local tool setup
-                sh 'pip3 install --user poetry || pip3 install poetry'
-                sh 'export PATH="$HOME/.local/bin:$PATH" && poetry install'
+                // PEP 668 policy bypass krne k liye explicit break flag ka use kiya h
+                sh 'pip3 install --user poetry --break-system-packages'
+                
+                // Project dependencies virtual env runtime context me deploy krna
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
+                    poetry config virtualenvs.in-project true
+                    poetry install --no-root
+                '''
             }
         }
 
         stage('Lint Checks') {
             steps {
-                // Makefile me clean fmt command available h use execute kr rahe h
-                sh 'export PATH="$HOME/.local/bin:$PATH" && poetry run make fmt || true' 
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
+                    poetry run make fmt || true
+                '''
             }
         }
 
         stage('Unit Tests') {
             steps {
-                // Pytest se application modules components test kr rahe h
-                sh 'export PATH="$HOME/.local/bin:$PATH" && poetry run pytest'
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
+                    poetry run pytest
+                '''
             }
         }
     }
