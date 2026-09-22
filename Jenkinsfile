@@ -11,14 +11,14 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // PEP 668 policy bypass krne k liye explicit break flag ka use kiya h
+                // Poetry securely user space me install ho rahi hai
                 sh 'pip3 install --user poetry --break-system-packages'
                 
-                // Project dependencies virtual env runtime context me deploy krna
+                // Poetry ke binary path ko environment me explicit update karna
                 sh '''
                     export PATH="$HOME/.local/bin:$PATH"
-                    poetry config virtualenvs.in-project true
-                    poetry install --no-root
+                    $HOME/.local/bin/poetry config virtualenvs.in-project true
+                    $HOME/.local/bin/poetry install --no-root
                 '''
             }
         }
@@ -27,7 +27,7 @@ pipeline {
             steps {
                 sh '''
                     export PATH="$HOME/.local/bin:$PATH"
-                    poetry run make fmt || true
+                    $HOME/.local/bin/poetry run make fmt || true
                 '''
             }
         }
@@ -36,7 +36,7 @@ pipeline {
             steps {
                 sh '''
                     export PATH="$HOME/.local/bin:$PATH"
-                    poetry run pytest
+                    $HOME/.local/bin/poetry run pytest
                 '''
             }
         }
