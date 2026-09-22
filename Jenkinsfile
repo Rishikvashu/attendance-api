@@ -11,18 +11,27 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'pip3 install --user poetry --break-system-packages'
-                
+                // Poetry bypass karke native venv isolation implement kiya hai
                 sh '''
+                    python3 -m venv venv
+                    ./venv/bin/pip install --upgrade pip setuptools wheel
+                    
+                    # Poetry configuration backup binary wheels use karna
+                    pip3 install --user poetry --break-system-packages || true
                     export PATH="$HOME/.local/bin:$PATH"
-                    $HOME/.local/bin/poetry config virtualenvs.in-project true
                     
-                    # Poetry virtual environment wrapper initialize karna
-                    $HOME/.local/bin/poetry run pip install -U pip setuptools wheel --break-system-packages || true
+                    # PyYAML dynamic setup configuration injection
+                    ./venv/bin/pip install "pyyaml==6.0.1" --only-binary=:all: || ./venv/bin/pip install pyyaml==6.0.2
                     
-                    # PyYAML compatibility fix: binary wheel force fetch enable karna
-                    export PIP_ONLY_BINARY=pyyaml
-                    $HOME/.local/bin/poetry install --no-root
+                    # Poetry dependencies export karke clean venv me install karna
+                    $HOME/.local/bin/poetry export -f requirements.txt --output requirements.txt --without-hashes || true
+                    
+                    # Requirements install execution block
+                    if [ -f requirements.txt ]; then
+                        ./venv/bin/pip install -r requirements.txt
+                    else
+                        $HOME/.local/bin/poetry install --no-root
+                    fi
                 '''
             }
         }
@@ -30,8 +39,10 @@ pipeline {
         stage('Lint Checks') {
             steps {
                 sh '''
-                    export PATH="$HOME/.local/bin:$PATH"
-                    $HOME/.local/bin/poetry run make fmt || true
+                    if [ -d "venv" ]; then
+                        ./venv/bin/pip install pylint flake8 || true
+                        ./venv/bin/flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+                    fi
                 '''
             }
         }
@@ -39,8 +50,10 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 sh '''
-                    export PATH="$HOME/.local/bin:$PATH"
-                    $HOME/.local/bin/poetry run pytest
+                    if [ -d "venv" ]; then
+                        ./venv/bin/pip install pytest pytest-cov || true
+                        ./venv/bin/pytest
+                    fi
                 '''
             }
         }
