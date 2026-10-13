@@ -40,6 +40,35 @@ pipeline {
                 '''
             }
         }
+        
+        stage('Diagnose Poetry Environment') {
+            steps {
+                sh '''
+                    set +e
+        
+                    echo "===== PYTHON ====="
+                    which python3
+                    python3 --version
+        
+                    echo "===== POETRY ====="
+                    which poetry
+                    poetry --version
+        
+                    echo "===== VIRTUALENV CONFIG ====="
+                    poetry config virtualenvs.create
+                    poetry config virtualenvs.in-project
+        
+                    echo "===== POETRY ENV INFO ====="
+                    poetry env info
+        
+                    echo "===== PYTHON EXECUTABLE ====="
+                    poetry run python -c "import sys; print(sys.executable)"
+        
+                    echo "===== POETRY ENVIRONMENT VARIABLES ====="
+                    env | grep -E '^(POETRY_VIRTUALENVS_CREATE|VIRTUAL_ENV|PYTHONPATH)=' || true
+                '''
+            }
+        }
 
         stage('Install Dependencies') {
             steps {
