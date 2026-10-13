@@ -11,6 +11,8 @@ pipeline {
     environment {
         PYTHONUNBUFFERED = '1'
         PIP_DISABLE_PIP_VERSION_CHECK = '1'
+        POETRY_VIRTUALENVS_CREATE = 'true'
+        POETRY_VIRTUALENVS_IN_PROJECT = 'true'
     }
 
     stages {
@@ -44,9 +46,10 @@ pipeline {
                 sh '''
                     set -eu
 
-                    poetry install --no-root --no-interaction --no-ansi
+                    poetry config virtualenvs.create true
+                    poetry config virtualenvs.in-project true
 
-                    poetry run python -m pip install pylint
+                    poetry install --no-root --no-interaction --no-ansi
                 '''
             }
         }
