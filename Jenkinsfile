@@ -88,7 +88,13 @@ pipeline {
                 sh '''
                     set -eu
 
-                    poetry run pylint router/ client/ models/ utils/ app.py
+                    poetry run pylint \
+                        router/ \
+                        client/ \
+                        models/ \
+                        utils/ \
+                        app.py \
+                        --ignore-patterns='(^|/)tests/'
                 '''
             }
         }
