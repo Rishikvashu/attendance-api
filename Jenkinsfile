@@ -88,13 +88,17 @@ pipeline {
                 sh '''
                     set -eu
 
+                    echo "===== PYLINT VERSION ====="
+                    poetry run pylint --version
+
+                    echo "===== PYTHON SOURCE FILES ====="
+                    find router client models utils -type f -name "*.py" \
+                        ! -path "*/tests/*" -print
+
+                    echo "===== PYLINT CHECK ====="
                     poetry run pylint \
-                        router/ \
-                        client/ \
-                        models/ \
-                        utils/ \
-                        app.py \
-                        --ignore-patterns='(^|/)tests/'
+                        --ignore-patterns='(^|/)tests/' \
+                        router/ client/ models/ utils/ app.py
                 '''
             }
         }
