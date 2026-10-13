@@ -542,7 +542,7 @@ files = [
 
 [[package]]
 name = "pyyaml"
-version = "6.0.2"
+version = "6.0"
 description = "YAML parser and emitter for Python"
 optional = false
 python-versions = ">=3.6"
