@@ -3,209 +3,258 @@ pipeline {
 
     options {
         timestamps()
-        skipDefaultCheckout(true)
         disableConcurrentBuilds()
-    }
-
-    parameters {
-        booleanParam(
-            name: 'RUN_UNIT_TESTS',
-            defaultValue: false,
-            description: 'Enable this option to run unit tests'
-        )
+        skipDefaultCheckout(true)
+        timeout(time: 20, unit: 'MINUTES')
     }
 
     environment {
-        PATH = "/var/lib/jenkins/.local/bin:/usr/local/bin:${env.PATH}"
         PYTHONUNBUFFERED = '1'
+        PIP_DISABLE_PIP_VERSION_CHECK = '1'
+        POETRY_VIRTUALENVS_CREATE = 'true'
+        POETRY_VIRTUALENVS_IN_PROJECT = 'true'
+        PATH = "/var/lib/jenkins/.local/bin:/usr/local/bin:${env.PATH}"
     }
 
     stages {
 
         // ==========================================
-        // Stage 1: Checkout Source Code
+        // 1. CHECKOUT
         // ==========================================
         stage('Checkout') {
             steps {
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/Rishikvashu/attendance-api.git',
-                        credentialsId: 'github-pat'
-                    ]]
-                ])
+                checkout scm
 
                 sh '''
-                    echo "=================================="
-                    echo "Repository Checkout Successful"
-                    echo "=================================="
+                    set -eu
 
-                    git log -1 --oneline
+                    echo "===== CHECKED OUT COMMIT ====="
+                    git rev-parse --short HEAD
+
+                    echo "===== CURRENT BRANCH ====="
+                    git branch --show-current
                 '''
             }
         }
 
         // ==========================================
-        // Stage 2: Verify CI Tools
+        // 2. VERIFY CI TOOLS
         // ==========================================
         stage('Verify CI Tools') {
             steps {
                 sh '''
-                    set -e
+                    set -eu
 
-                    echo "Checking Python..."
+                    echo "===== VERIFYING PYTHON ====="
+                    command -v python3
                     python3 --version
 
-                    echo "Checking Poetry..."
+                    echo "===== VERIFYING POETRY ====="
+                    command -v poetry
                     poetry --version
 
-                    echo "Checking Gitleaks..."
+                    echo "===== VERIFYING GITLEAKS ====="
+                    command -v gitleaks
                     gitleaks version
 
-                    echo "Checking Git..."
+                    echo "===== VERIFYING GIT ====="
+                    command -v git
                     git --version
-
-                    echo "All required CI tools are available."
                 '''
             }
         }
 
         // ==========================================
-        // Stage 3: Diagnose Poetry Environment
+        // 3. DIAGNOSE POETRY ENVIRONMENT
         // ==========================================
         stage('Diagnose Poetry Environment') {
             steps {
                 sh '''
-                    echo "Checking Poetry configuration..."
-                    poetry env info || true
+                    set -eu
 
-                    echo "Checking Python version..."
-                    poetry run python --version
+                    echo "===== BASE PYTHON ====="
+                    python3 --version
+                    which python3
 
-                    echo "Checking installed dependencies..."
-                    poetry show --installed || poetry show
+                    echo "===== POETRY CONFIGURATION ====="
+                    poetry config virtualenvs.create
+                    poetry config virtualenvs.in-project
+
+                    echo "===== CREATING / CHECKING VIRTUALENV ====="
+                    poetry run python -c \
+                        "import sys; print(sys.executable)"
+
+                    echo "===== POETRY ENVIRONMENT INFO ====="
+                    poetry env info
+
+                    echo "===== PYTHON ENVIRONMENT VARIABLES ====="
+                    env | grep -E \
+                        '^(POETRY_VIRTUALENVS_CREATE|VIRTUAL_ENV|PYTHONPATH)=' \
+                        || true
                 '''
             }
         }
 
         // ==========================================
-        // Stage 4: Install Dependencies
+        // 4. INSTALL DEPENDENCIES
         // ==========================================
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    set -e
+                    set -eu
 
-                    echo "Installing project dependencies..."
+                    echo "===== CONFIGURING POETRY ====="
 
-                    poetry install --no-interaction
+                    poetry config virtualenvs.create true
+                    poetry config virtualenvs.in-project true
 
-                    echo "Dependency installation completed."
+                    echo "===== INSTALLING PROJECT DEPENDENCIES ====="
+
+                    poetry install \
+                        --no-root \
+                        --no-interaction \
+                        --no-ansi
+
+                    echo "===== VERIFYING PYTEST ====="
+
+                    poetry run python -m pytest --version
+
+                    echo "===== VERIFYING PYLINT ====="
+
+                    poetry run pylint --version
                 '''
             }
         }
 
         // ==========================================
-        // Stage 5: Code Quality - Pylint
+        // 5. CODE QUALITY - PYLINT
+        // APPLICATION CODE ONLY; EXCLUDE TESTS
         // ==========================================
         stage('Code Quality - Pylint') {
             steps {
                 sh '''
-                    set -e
+                    set -eu
 
-                    echo "Running Pylint..."
+                    echo "===== COLLECTING APPLICATION FILES ====="
 
-                    poetry run pylint \
-                        --fail-under=8.0 \
-                        $(git ls-files '*.py')
+                    : > pylint-files.txt
+
+                    for directory in router client models utils; do
+                        if [ -d "$directory" ]; then
+                            find "$directory" \
+                                -type f \
+                                -name "*.py" \
+                                ! -path "*/tests/*" \
+                                -print
+                        fi
+                    done > pylint-files.txt
+
+                    if [ -f app.py ]; then
+                        echo "app.py" >> pylint-files.txt
+                    fi
+
+                    echo "===== FILES SELECTED FOR PYLINT ====="
+                    cat pylint-files.txt
+
+                    if [ ! -s pylint-files.txt ]; then
+                        echo "ERROR: No application Python files found."
+                        exit 1
+                    fi
+
+                    echo "===== CHECKING TEST EXCLUSION ====="
+
+                    if grep -E '(^|/)tests/' pylint-files.txt; then
+                        echo "ERROR: Test files found in Pylint input."
+                        exit 1
+                    else
+                        echo "PASS: Test files excluded."
+                    fi
+
+                    echo "===== RUNNING PYLINT ====="
+
+                    xargs -r poetry run pylint < pylint-files.txt
                 '''
             }
         }
 
         // ==========================================
-        // Stage 6: Unit Tests (Optional)
+        // 6. UNIT TESTS
         // ==========================================
         stage('Unit Tests') {
-            when {
-                expression {
-                    return params.RUN_UNIT_TESTS
-                }
-            }
-
             steps {
                 sh '''
-                    set -e
+                    set -eu
+
+                    echo "===== PREPARING REPORT DIRECTORY ====="
 
                     mkdir -p reports
 
-                    echo "Running Unit Tests..."
+                    echo "===== RUNNING PYTEST ====="
 
                     poetry run python -m pytest \
                         --junitxml=reports/pytest.xml \
                         --cov=. \
                         --cov-report=xml:reports/coverage.xml
+
+                    echo "===== UNIT TESTS COMPLETED ====="
                 '''
-            }
-
-            post {
-                always {
-                    junit(
-                        testResults: 'reports/pytest.xml',
-                        allowEmptyResults: true
-                    )
-
-                    archiveArtifacts(
-                        artifacts: 'reports/coverage.xml',
-                        allowEmptyArchive: true
-                    )
-                }
             }
         }
 
         // ==========================================
-        // Stage 7: Credential Scan - Gitleaks
+        // 7. CREDENTIAL SCAN - GITLEAKS
         // ==========================================
         stage('Credential Scan - Gitleaks') {
             steps {
                 sh '''
-                    set -e
+                    set -eu
 
-                    echo "=================================="
-                    echo "Starting Credential Scanning"
-                    echo "=================================="
+                    echo "===== GITLEAKS VERSION ====="
+                    gitleaks version
 
-                    gitleaks detect \
-                        --source . \
+                    echo "===== SCANNING GIT REPOSITORY ====="
+
+                    gitleaks git . \
                         --redact \
-                        --verbose \
-                        --exit-code 1
+                        --no-banner
 
-                    echo "=================================="
-                    echo "Gitleaks Scan Passed"
-                    echo "No credentials detected."
-                    echo "=================================="
+                    echo "===== GITLEAKS SCAN COMPLETED ====="
                 '''
             }
         }
     }
 
     // ==========================================
-    // Post-Build Actions
+    // POST-BUILD ACTIONS
     // ==========================================
     post {
+
+        always {
+            echo '===== PROCESSING TEST REPORTS ====='
+
+            junit(
+                testResults: 'reports/pytest.xml',
+                allowEmptyResults: true
+            )
+
+            echo '===== ARCHIVING REPORTS ====='
+
+            archiveArtifacts(
+                artifacts: 'reports/**',
+                allowEmptyArchive: true
+            )
+        }
+
         success {
-            echo 'Pipeline completed successfully.'
+            echo 'Attendance API CI pipeline passed.'
         }
 
         failure {
-            echo 'Pipeline failed. Check the Console Output for details.'
+            echo 'Attendance API CI pipeline failed. Check the failed stage logs.'
         }
 
-        always {
-            echo 'Build execution completed.'
-
-            cleanWs()
+        cleanup {
+            deleteDir()
         }
     }
 }
