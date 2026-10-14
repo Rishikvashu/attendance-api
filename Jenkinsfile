@@ -197,31 +197,7 @@ pipeline {
                 '''
             }
         }
-
-    //     // ==========================================
-    //     // 7. UNIT TESTS - SKIPPED
-    //     // ==========================================
-    //     stage('Unit Tests') {
-    //         when {
-    //             expression {
-    //                 return false
-    //             }
-    //         }
-
-    //         steps {
-    //             sh '''
-    //                 set -eu
-
-    //                 mkdir -p reports
-
-    //                 poetry run python -m pytest \
-    //                     --junitxml=reports/pytest.xml \
-    //                     --cov=. \
-    //                     --cov-report=xml:reports/coverage.xml
-    //             '''
-    //         }
-    //     }
-    // }
+    }
 
     // ==========================================
     // POST-BUILD ACTIONS
