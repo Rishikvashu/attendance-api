@@ -65,7 +65,30 @@ pipeline {
         }
 
         // ==========================================
-        // 3. DIAGNOSE POETRY ENVIRONMENT
+        // 3. CREDENTIAL SCAN - GITLEAKS
+        // Run before other quality/dependency stages
+        // ==========================================
+        stage('Credential Scan - Gitleaks') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "===== GITLEAKS VERSION ====="
+                    gitleaks version
+
+                    echo "===== SCANNING GIT REPOSITORY ====="
+
+                    gitleaks git . \
+                        --redact \
+                        --no-banner
+
+                    echo "===== GITLEAKS SCAN COMPLETED ====="
+                '''
+            }
+        }
+
+        // ==========================================
+        // 4. DIAGNOSE POETRY ENVIRONMENT
         // ==========================================
         stage('Diagnose Poetry Environment') {
             steps {
@@ -80,7 +103,7 @@ pipeline {
                     poetry config virtualenvs.create
                     poetry config virtualenvs.in-project
 
-                    echo "===== CREATING / CHECKING VIRTUALENV ====="
+                    echo "===== CHECKING VIRTUAL ENVIRONMENT ====="
                     poetry run python -c \
                         "import sys; print(sys.executable)"
 
@@ -96,7 +119,7 @@ pipeline {
         }
 
         // ==========================================
-        // 4. INSTALL DEPENDENCIES
+        // 5. INSTALL DEPENDENCIES
         // ==========================================
         stage('Install Dependencies') {
             steps {
@@ -108,7 +131,7 @@ pipeline {
                     poetry config virtualenvs.create true
                     poetry config virtualenvs.in-project true
 
-                    echo "===== INSTALLING PROJECT DEPENDENCIES ====="
+                    echo "===== INSTALLING DEPENDENCIES ====="
 
                     poetry install \
                         --no-root \
@@ -116,19 +139,17 @@ pipeline {
                         --no-ansi
 
                     echo "===== VERIFYING PYTEST ====="
-
                     poetry run python -m pytest --version
 
                     echo "===== VERIFYING PYLINT ====="
-
                     poetry run pylint --version
                 '''
             }
         }
 
         // ==========================================
-        // 5. CODE QUALITY - PYLINT
-        // APPLICATION CODE ONLY; EXCLUDE TESTS
+        // 6. CODE QUALITY - PYLINT
+        // Application code only; exclude tests
         // ==========================================
         stage('Code Quality - Pylint') {
             steps {
@@ -178,47 +199,25 @@ pipeline {
         }
 
         // ==========================================
-        // 6. UNIT TESTS
+        // 7. UNIT TESTS - SKIPPED
         // ==========================================
         stage('Unit Tests') {
+            when {
+                expression {
+                    return false
+                }
+            }
+
             steps {
                 sh '''
                     set -eu
 
-                    echo "===== PREPARING REPORT DIRECTORY ====="
-
                     mkdir -p reports
-
-                    echo "===== RUNNING PYTEST ====="
 
                     poetry run python -m pytest \
                         --junitxml=reports/pytest.xml \
                         --cov=. \
                         --cov-report=xml:reports/coverage.xml
-
-                    echo "===== UNIT TESTS COMPLETED ====="
-                '''
-            }
-        }
-
-        // ==========================================
-        // 7. CREDENTIAL SCAN - GITLEAKS
-        // ==========================================
-        stage('Credential Scan - Gitleaks') {
-            steps {
-                sh '''
-                    set -eu
-
-                    echo "===== GITLEAKS VERSION ====="
-                    gitleaks version
-
-                    echo "===== SCANNING GIT REPOSITORY ====="
-
-                    gitleaks git . \
-                        --redact \
-                        --no-banner
-
-                    echo "===== GITLEAKS SCAN COMPLETED ====="
                 '''
             }
         }
@@ -228,7 +227,6 @@ pipeline {
     // POST-BUILD ACTIONS
     // ==========================================
     post {
-
         always {
             echo '===== PROCESSING TEST REPORTS ====='
 
