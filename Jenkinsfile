@@ -13,7 +13,7 @@ pipeline {
         PIP_DISABLE_PIP_VERSION_CHECK = '1'
         POETRY_VIRTUALENVS_CREATE = 'true'
         POETRY_VIRTUALENVS_IN_PROJECT = 'true'
-        PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
+         PATH = "/var/lib/jenkins/.local/bin:/usr/local/bin:${env.PATH}"
     }
 
     stages {
